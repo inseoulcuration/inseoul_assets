@@ -1,0 +1,607 @@
+{
+  "name": "06. 인스타그램 캐러셀 발행 (inseoul_발행)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "c1717a2e-fc04-4880-ad12-1d54bb4b197d",
+      "name": "실행",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1e3ym-2I7ju60aVtuCqFCRgNzT4LIvXaZRfe6ZjYx_eo"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "0"
+        },
+        "options": {}
+      },
+      "id": "0bf48a92-6f35-4bb5-9776-eb273e50e6c6",
+      "name": "시트 읽기 (전체)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        460,
+        320
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets - inseoul"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst rows = $input.all().map(i => i.json);\nconst target = rows.find(r => String(r['상태'] || '').trim() === '발행대기');\nif (!target) return [];\nreturn [{ json: target }];\n",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "1362d78c-90ca-4b61-a7ee-85b755ea991f",
+      "name": "발행대기 행 찾기",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst row = $input.first().json;\nconst urls = String(row['렌더URL'] || '').split(',').filter(Boolean);\nreturn urls.map(u => ({ json: { url: u } }));\n",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "06f85005-c94c-4e91-9341-d59fc1fb50cb",
+      "name": "이미지 목록 생성",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v23.0/me/media",
+        "options": {},
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "image_url",
+              "value": "={{ $json.url }}"
+            },
+            {
+              "name": "is_carousel_item",
+              "value": "true"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $env.META_ACCESS_TOKEN }}"
+            }
+          ]
+        }
+      },
+      "id": "5f98a27b-9247-4360-96c2-bb22e292960c",
+      "name": "Instagram: 이미지 컨테이너 생성",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst responses = $input.all();\nconst ids = responses.map(r => (r.json && r.json.data) ? r.json.data.id : '').filter(Boolean);\nconst rowInfo = $('발행대기 행 찾기').item.json;\nreturn [{ json: { row_number: rowInfo.row_number, caption: rowInfo['캡션'] || '', children: ids.join(',') } }];\n",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "080044ae-40ce-4a95-baab-83b3fb246a62",
+      "name": "컨테이너 ID 합치기",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v23.0/me/media",
+        "options": {},
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "media_type",
+              "value": "CAROUSEL"
+            },
+            {
+              "name": "children",
+              "value": "={{ $json.children }}"
+            },
+            {
+              "name": "caption",
+              "value": "={{ $json.caption }}"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $env.META_ACCESS_TOKEN }}"
+            }
+          ]
+        }
+      },
+      "id": "5d8cb516-81ad-422b-bc22-c74be60325ef",
+      "name": "Instagram: 캐러셀 컨테이너 생성",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1560,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst c = $input.first().json;\nconst prior = $('컨테이너 ID 합치기').item.json;\nreturn [{ json: {\n  container_id: c.data.id,\n  row_number: prior.row_number,\n  caption: prior.caption,\n  attempt: 0,\n  finished: false,\n} }];\n",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "a0d4ba49-2bda-46bf-9dec-fb6afda2fe75",
+      "name": "폴링 준비",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 5,
+        "unit": "seconds"
+      },
+      "id": "6c839942-0600-453d-9a84-135171e47ad4",
+      "name": "5초 대기",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2000,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://graph.instagram.com/v23.0/{{ $json.container_id }}",
+        "options": {},
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "status_code"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $env.META_ACCESS_TOKEN }}"
+            }
+          ]
+        }
+      },
+      "id": "a31c8703-14f3-4919-9050-991f3f38c431",
+      "name": "Instagram: 컨테이너 상태 조회",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2220,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst prev = $('5초 대기').item.json;\nconst statusCode = $input.first().json.status_code;\nconst finished = statusCode === 'FINISHED';\nconst attempt = finished ? prev.attempt : (prev.attempt || 0) + 1;\nreturn [{ json: {\n  container_id: prev.container_id,\n  row_number: prev.row_number,\n  caption: prev.caption,\n  attempt: attempt,\n  finished: finished,\n} }];\n",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "0cbdfa5e-0bb5-4ca2-82f1-e40a3ea29ad6",
+      "name": "카운트 판단",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2440,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "a92cb438-6587-4bcf-aac2-14d505b82758",
+              "leftValue": "={{ $json.finished }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "eec77744-7a4a-4990-a37e-3a81ac6d3845",
+      "name": "완료됐는가",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2660,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v23.0/me/media_publish",
+        "options": {},
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "creation_id",
+              "value": "={{ $('카운트 판단').item.json.container_id }}"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $env.META_ACCESS_TOKEN }}"
+            }
+          ]
+        }
+      },
+      "id": "028e1cc8-7889-4bb3-b3ec-e355c2881d99",
+      "name": "Instagram: 캐러셀 발행",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2880,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1e3ym-2I7ju60aVtuCqFCRgNzT4LIvXaZRfe6ZjYx_eo"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "row_number"
+          ],
+          "value": {
+            "row_number": "={{ $('카운트 판단').item.json.row_number }}",
+            "상태": "발행완료",
+            "발행일시": "={{ $now }}"
+          },
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "61e70fd7-13da-4d14-af73-bf41b8777c63",
+      "name": "시트 갱신 (완료)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3100,
+        180
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets - inseoul"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "51b509b8-d8f8-45bd-ab32-f779007f050d",
+              "leftValue": "={{ $json.attempt }}",
+              "rightValue": 4,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "87809932-e460-42bb-af28-5ff6a7ae6f46",
+      "name": "최대 시도 초과?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1e3ym-2I7ju60aVtuCqFCRgNzT4LIvXaZRfe6ZjYx_eo"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "row_number"
+          ],
+          "value": {
+            "row_number": "={{ $json.row_number }}",
+            "상태": "실패",
+            "검증로그": "발행 폴링 시간초과 (5초 x 4회)"
+          },
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "6451783f-9f9e-4afc-ba5f-60cd873156b3",
+      "name": "시트 갱신 (실패)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3100,
+        560
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets - inseoul"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "Make에서는 Repeater 안에서 뒤 모듈을 참조할 수 없어 조기 종료가\n불가능했습니다(문서 §9). n8n은 If 노드로 실제 조기 종료가 가능합니다 —\n'완료됐는가'가 참이면 즉시 발행하고, 5초x4회를 다 기다리지 않습니다.",
+        "height": 160,
+        "width": 360
+      },
+      "id": "b3229152-0648-45db-8072-55ac4bed3064",
+      "name": "Note10",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2400,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "content": "'컨테이너 상태 조회'는 매 루프마다 새로 실행되므로 $json에는\ncontainer_id가 없습니다. 그래서 '카운트 판단'은 $('5초 대기')로\n직전 상태(container_id·attempt 등)를 다시 가져옵니다.",
+        "height": 160,
+        "width": 340
+      },
+      "id": "aa813a24-24b7-4a13-9a0c-5688b07bf28e",
+      "name": "Note11",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2160,
+        480
+      ]
+    }
+  ],
+  "connections": {
+    "실행": {
+      "main": [
+        [
+          {
+            "node": "시트 읽기 (전체)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "시트 읽기 (전체)": {
+      "main": [
+        [
+          {
+            "node": "발행대기 행 찾기",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "발행대기 행 찾기": {
+      "main": [
+        [
+          {
+            "node": "이미지 목록 생성",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "이미지 목록 생성": {
+      "main": [
+        [
+          {
+            "node": "Instagram: 이미지 컨테이너 생성",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram: 이미지 컨테이너 생성": {
+      "main": [
+        [
+          {
+            "node": "컨테이너 ID 합치기",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "컨테이너 ID 합치기": {
+      "main": [
+        [
+          {
+            "node": "Instagram: 캐러셀 컨테이너 생성",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram: 캐러셀 컨테이너 생성": {
+      "main": [
+        [
+          {
+            "node": "폴링 준비",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "폴링 준비": {
+      "main": [
+        [
+          {
+            "node": "5초 대기",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5초 대기": {
+      "main": [
+        [
+          {
+            "node": "Instagram: 컨테이너 상태 조회",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram: 컨테이너 상태 조회": {
+      "main": [
+        [
+          {
+            "node": "카운트 판단",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "카운트 판단": {
+      "main": [
+        [
+          {
+            "node": "완료됐는가",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "완료됐는가": {
+      "main": [
+        [
+          {
+            "node": "Instagram: 캐러셀 발행",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "최대 시도 초과?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram: 캐러셀 발행": {
+      "main": [
+        [
+          {
+            "node": "시트 갱신 (완료)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "최대 시도 초과?": {
+      "main": [
+        [
+          {
+            "node": "시트 갱신 (실패)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "5초 대기",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

@@ -1,0 +1,519 @@
+{
+  "name": "02. 사실조사 결과 수령 + 게이트A + 원고 제출 (inseoul_사실수령)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "0931ca8b-99f1-4434-ac2a-dc4f9b42a462",
+      "name": "실행",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1e3ym-2I7ju60aVtuCqFCRgNzT4LIvXaZRfe6ZjYx_eo"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "0"
+        },
+        "options": {}
+      },
+      "id": "f5dc47ed-5d8f-4aa5-b2e0-4f7f0067a468",
+      "name": "시트 읽기 (전체)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        460,
+        400
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets - inseoul"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst rows = $input.all().map(i => i.json);\nconst target = rows.find(r => String(r['상태'] || '').trim() === '조사중' && String(r['배치ID'] || '').trim() !== '');\nif (!target) return [];\nreturn [{ json: target }];\n",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "6c595de2-8c9f-445c-8e9e-1a2c39f0bb93",
+      "name": "조사중 행 찾기",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.anthropic.com/v1/messages/batches/{{ $json['배치ID'] }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "id": "f90906d4-2162-4dc7-a2f4-9b6c0bbc9db3",
+      "name": "Anthropic: 배치 상태 조회",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "71725e4d-33fc-4a32-b321-16a528e69709",
+              "leftValue": "={{ $json.processing_status }}",
+              "rightValue": "ended",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "03ad2e54-5dcb-42f3-afdc-bef8dcc5e6da",
+      "name": "조사 완료됨?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        400
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "cf29a144-a8a9-4afe-bbb2-e036f772e75b",
+      "name": "아직 진행중 (다음 실행에서 재확인)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.results_url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "id": "44e5ede0-9b0c-4725-b0f7-b5e1ad617324",
+      "name": "Anthropic: 결과 다운로드 (raw)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst item = $input.first().json;\nconst raw = (item && item.data !== undefined) ? item.data : item;\nconst text = typeof raw === 'string' ? raw : JSON.stringify(raw);\nconst lines = text.split('\\n').map(l => l.trim()).filter(Boolean);\nif (!lines.length) { throw new Error('배치 결과가 비어 있습니다 (results_url 응답을 확인하세요)'); }\nconst result = JSON.parse(lines[0]);\nconst blocks = (result.result && result.result.message && result.result.message.content) || [];\nconst textBlocks = blocks.filter(b => b.type === 'text');\nif (!textBlocks.length) { throw new Error('사실조사 응답에 text 블록이 없습니다'); }\nconst lastText = textBlocks[textBlocks.length - 1].text;\n\nlet between = lastText.split('<<<').pop().split('>>>')[0].trim();\nbetween = between.replace(/\\r?\\n/g, ' ');\nconst facts = JSON.parse(between);\n\nconst factsArr = facts.facts || [];\nconst sourcesArr = facts.sources || [];\nconst entitiesArr = facts.entities || [];\nconst firstEntityFactIds = (entitiesArr[0] && entitiesArr[0].fact_ids) || [];\nconst passGateA = factsArr.length >= 6 && sourcesArr.length >= 2 && firstEntityFactIds.length >= 1;\n\nconst sourceUrls = sourcesArr.map(s => s.url).filter(Boolean).join(', ');\nconst rowInfo = $('조사중 행 찾기').item.json;\n\nconst gateReason = passGateA\n  ? '게이트A 통과'\n  : ('게이트A 탈락: facts ' + factsArr.length + '/6, sources ' + sourcesArr.length + '/2, entity1 fact_ids ' + firstEntityFactIds.length + '/1');\n\nreturn [{ json: {\n  row_number: rowInfo.row_number,\n  facts_json_text: between,\n  image_grade: facts.image_grade || '',\n  grade_reason: facts.grade_reason || '',\n  source_urls: sourceUrls,\n  pass_gate_a: passGateA,\n  gate_reason: gateReason,\n} }];\n",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "57f1c5bb-813a-49a5-bea5-3cf311066302",
+      "name": "사실 JSON 추출 + 게이트A 판정",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "867b6b59-0db4-4f58-af03-b6545a2bfe8b",
+              "leftValue": "={{ $json.pass_gate_a }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a8c4f6bf-c329-43fb-b7c2-0df192929cfa",
+      "name": "게이트A 통과?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst g = $input.first().json;\nconst systemPrompt = `당신은 서울의 리테일·공간을 다루는 인스타그램 카드뉴스 에디터입니다.\n\n사용자가 주는 사실 카드에 있는 정보만으로 카드뉴스 원고를 작성하세요.\n\n절대 규칙\n1. 사실 카드에 없는 정보는 어떤 형태로도 쓰지 마세요.\n2. 숫자·시기·규모는 numbers 배열의 value를 표기까지 그대로 쓰세요. 반올림·환산·추정 금지.\n3. 고유명사는 names 배열의 표기 그대로. 축약·변형 금지.\n4. 인과(~때문에, ~하자 ~했다)와 추세(늘고 있다, 확산되고 있다)는 facts가 명시한 경우에만.\n5. 해석과 관점은 자유롭게 쓰되 사실처럼 단정하지 마세요. ~로 보인다 / ~인 셈이다 / ~라고 읽힌다 형태로.\n6. 사실이 부족하면 슬라이드 수를 줄이세요. 빈칸을 추측으로 메우지 마세요.\n7. 영업시간·주차·입장료·가격은 넣지 마세요. 다만 운영시간 자체가 그 주제의 핵심 뉴스라면 쓸 수 있습니다.\n8. entities 중 fact_ids가 빈 대상은 사실 서술의 주어로 쓰지 마세요.\n\n구성\n- 표지 1장: headline은 스크롤을 멈추게 하는 문장.\n- 본문 3~9장: 사실 밀도가 개수를 정합니다. 억지로 채우지 마세요.\n  - 사실이 얇으면 3~4장에서 끝내는 것이 맞습니다. 짧은 것은 결함이 아닙니다.\n  - 한 슬라이드에 한 논지. 같은 논지를 두 장으로 나누지 마세요.\n  - 근거 없이 이어붙인 슬라이드는 카드뉴스를 늘리는 것이 아니라 약하게 만듭니다.\n  - angle을 향해 논지가 쌓이도록 배열하세요.\n- 클로징 1장: 관점을 남기는 마무리.\n\n분량\n- body는 90자 이하(공백 포함). 카드에서 정확히 네 줄까지 들어갑니다.\n  넘으면 글자가 상자 밖으로 잘립니다.\n- 다만 표지 body는 40자 이하로 씁니다. 표지는 스크롤을 멈추게 하는 훅이지\n  설명하는 자리가 아닙니다. 표지 사진을 크게 쓰기 위한 규격이기도 합니다.\n- 하한은 없습니다. 할 말이 30자면 30자로 끝내세요. 분량을 채우려 늘리지 마세요.\n- headline은 두 줄 안에 읽히는 길이면 됩니다.\n- 글자 수를 일일이 세지 마세요. 눈대중으로 넘지 않으면 됩니다.\n- 세 줄로 끝나면 그게 더 좋습니다. 네 줄은 상한이지 목표가 아닙니다.\n\n클로징 주의: angle을 그대로 옮겨 적지 마세요. angle은 재료일 뿐입니다.\n앞 슬라이드에서 쌓은 논지가 도달하는 지점을 한 문장으로 남기세요.\n\n문체\n- 리테일 MD의 관찰 시선. 감탄·홍보 어투 금지.\n- 형용사보다 구조와 숫자로 말할 것.\n- ~습니다체 대신 ~다체.\n\n[사진 배분]\n사실 카드의 image_grade에 따라 슬라이드마다 photo_type을 정합니다.\n\nA등급 — 클로징을 뺀 모든 슬라이드를 실사로.\nB등급 — 표지 포함 실사 3~4장. 나머지는 브랜드 또는 연출.\nC등급 — 표지 포함 실사 1~2장만. 나머지는 브랜드 2~3장, 연출 2~3장.\n\n본문이 3~4장으로 짧으면 위 장수도 그에 맞춰 줄입니다. 비율을 지키는 것이지\n장수를 채우는 것이 아닙니다.\n\nphoto_type 정의\n- 실사: 그 공간을 직접 찍은 사진. 외관, 내부, 특정 층이나 코너\n- 브랜드: 로고, 제품, 패키지, 시그니처 아이템 등 브랜드 자산\n- 연출: 질감, 소재, 거리 풍경, 도시 전경. 특정 장소를 사칭하지 않는 이미지\n\n실사를 배치할 자리\n- 표지는 항상 실사\n- 그 공간에서만 볼 수 있는 것을 다루는 슬라이드에 우선 배치\n- 개념이나 해석을 다루는 슬라이드에는 브랜드나 연출을 배치\n\n[사진 중복 금지]\n같은 photo_query를 세 장 이상에 쓰지 마세요. 최대 두 장까지입니다.\n한 대상의 사진을 세 장 이상 구하는 것은 현실적으로 어렵습니다.\n세 장 이상 같은 대상이 이어진다면 슬라이드 구성 자체를 바꾸세요.\n인접한 두 슬라이드가 같은 대상을 다룰 때만 photo_query를 똑같이 씁니다.\n같은 사진을 두 장에 쓰겠다는 신호입니다. photo_caption은 슬라이드마다 다르게 씁니다.\n\n[photo_query 작성]\n사진을 찾는 사람이 그대로 검색어로 쓸 수 있게 씁니다. 한 줄 25자 이내.\n\n핵심: 그 사진이 반드시 그 대상을 찍은 것일 필요는 없습니다.\n카드의 맥락과 어우러지면 됩니다. 구하기 어려운 검색어보다\n맥락이 맞으면서 실제로 찾을 수 있는 검색어가 낫습니다.\n\n- 그 공간에서만 볼 수 있는 것을 다루는 슬라이드: 장소명 + 찍을 대상\n  (성수 팝업 외관 / 서울달 야경)\n- 그 밖의 슬라이드: 한 단계 넓혀서 씁니다\n  동네 이름, 업종, 시간대, 상황 등 그 카드의 분위기를 이루는 것\n  (성수동 거리 저녁 / 한강 야경 여의도 / 백화점 매장 통로)\n- 연출: 피사체 + 질감이나 상태 (콘크리트 외벽 / 젖은 아스팔트 야간)\n\n좁게 쓰면 아무것도 못 찾습니다. 그 장면이 아니면 카드가 성립하지 않는\n경우에만 좁게 쓰고, 나머지는 넓게 쓰세요.\n\n[photo_source]\n그 슬라이드의 사진을 구할 수 있을 만한 출처 URL입니다.\n사람이 이 링크를 열어 사진을 직접 받아옵니다.\n- 그 슬라이드의 used_facts에 해당하는 사실들의 source_url 중에서 고릅니다\n- 슬라이드마다 서로 다른 URL을 쓰세요. 같은 사안을 다룬 기사 여러 건은\n  대개 같은 보도자료를 받아 같은 사진을 싣습니다\n- 쓸 URL이 부족하면 빈 문자열로 두세요. 같은 URL을 반복하지 마세요\n- 사실 카드에 없는 URL을 절대 지어내지 마세요\n- URL은 사실 카드에 적힌 그대로. 축약·변형 금지\n\n[photo_credit]\nphoto_source로 고른 출처의 표기명입니다. 카드 사진 위에 인쇄됩니다.\n- 사실 카드 sources에서 그 URL의 publisher를 찾아 앞에 ⓒ 를 붙입니다\n  예: publisher가 \"헤럴드경제\"면 → \"ⓒ 헤럴드경제\"\n- photo_source가 빈 문자열이면 photo_credit도 빈 문자열입니다\n- publisher를 지어내거나 축약하지 마세요. 사실 카드에 적힌 그대로\n\n[photo_caption]\n카드 사진 위에 실제로 인쇄되는 한 줄입니다.\nphoto_query가 사진을 찾는 사람을 위한 검색어라면, photo_caption은\n카드를 보는 사람에게 지금 무엇을 보고 있는지 알려주는 문장입니다.\n- 18자 이내. 조사와 서술어를 빼고 명사구로 끝냅니다\n- 실사: 장소명 + 어디를 찍었는지 (2층 아카이브 존 / 성수 팝업 외관)\n- 브랜드: 브랜드명 + 대상 (루이비통 시그니처 트렁크)\n- 연출: 무엇인지만 (콘크리트 외벽 / 저녁 성수 골목)\n- 분위기 형용사 금지. 사실만\n- 실사/브랜드/연출이라는 분류값 자체를 문구에 넣지 마세요\n\n클로징은 photo_type, photo_query, photo_caption, photo_source, photo_credit을 모두 빈 문자열로 둡니다.\n\n[캡션]\ncaption은 인스타그램 게시물 본문입니다. 카드와 별개로 한 편을 씁니다.\n존댓말로 씁니다. 카드 본문은 ~다체지만 캡션만 ~습니다체입니다.\n\n구조 (순서대로, 블록 사이는 빈 줄)\n1. 훅 — 2줄, 40자 이내. 피드에서 잘리기 전 보이는 구간입니다\n2. 본문 — 3~4문단, 300~450자. 카드 사실을 나열하지 말고 묶어서 해석하세요\n3. MD 시선 — 100자 내외. \"그래서 이게 왜 중요한가\"\n4. 질문 — 2줄. 답이 갈리는 질문 하나. 논쟁 여지가 없으면 생략합니다\n5. 서명 — 서울의 리테일 공간을 MD 시선으로 기록합니다.\n6. 해시태그 4개 — #서울리테일 #리테일MD #공간기획 + 해당 공간·브랜드 고유명사 1개\n\n원칙\n- 카드에 있는 세부 사실(날짜·수치·인명)을 그대로 반복하지 마세요.\n  캡션은 카드에 없는 맥락을 주는 자리입니다\n- 첫 줄에 해시태그를 넣지 마세요\n- 문장은 짧게. 모바일에서 세 줄 넘는 문단은 읽히지 않습니다\n- 저장·공유 유도 문구를 넣지 마세요. 질문이 이미 참여를 요청하는데\n  CTA까지 붙으면 요구가 두 번이 됩니다\n- 질문은 열린 질문(어떻게 보시나요) 대신 편이 갈리는 질문(득일까 실일까)으로\n- 사실 카드에 없는 정보는 캡션에도 쓰지 마세요. 절대 규칙 1은 캡션에도 적용됩니다\n- 줄바꿈은 실제 개행으로 넣으세요\n\n\n출력은 <<< 와 >>> 사이에 JSON만. 형식: {\"slides\":[{\"no\":1,\"role\":\"표지|본문|클로징\",\"headline\":\"\",\"body\":\"\",\"photo_type\":\"실사|브랜드|연출\",\"photo_query\":\"\",\"photo_caption\":\"\",\"photo_source\":\"\",\"photo_credit\":\"\",\"used_facts\":[\"f1\"]}],\"numbers_used\":[],\"names_used\":[],\"caption\":\"\"}\n\nused_facts는 모든 슬라이드에 붙이세요. numbers_used와 names_used에는 원고에 실제로 등장시킨 것만 빠짐없이 적으세요.`;\n\nconst body = {\n  requests: [{\n    custom_id: 'draft',\n    params: {\n      model: 'claude-sonnet-4-6',\n      max_tokens: 10000,\n      system: systemPrompt,\n      messages: [{ role: 'user', content: g.facts_json_text }]\n    }\n  }]\n};\n\nreturn [{ json: { ...g, body } }];\n",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "15b08873-1dc9-41da-9239-8116cffb54e7",
+      "name": "원고 요청 본문 생성",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages/batches",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}"
+      },
+      "id": "1ed7fed2-3cd1-4e89-a3a6-56d2f8655b2c",
+      "name": "Anthropic: 원고 배치 제출",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2220,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1e3ym-2I7ju60aVtuCqFCRgNzT4LIvXaZRfe6ZjYx_eo"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "row_number"
+          ],
+          "value": {
+            "row_number": "={{ $('원고 요청 본문 생성').item.json.row_number }}",
+            "사실JSON": "={{ $('원고 요청 본문 생성').item.json.facts_json_text }}",
+            "검증로그": "={{ $('원고 요청 본문 생성').item.json.gate_reason }}",
+            "출처URL": "={{ $('원고 요청 본문 생성').item.json.source_urls }}",
+            "이미지등급": "={{ $('원고 요청 본문 생성').item.json.image_grade }}",
+            "원고배치ID": "={{ $json.data.id }}",
+            "상태": "생성중"
+          },
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "b059c7f5-0640-499e-b852-f361ec32701d",
+      "name": "시트 갱신 (통과: 생성중)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2440,
+        200
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets - inseoul"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1e3ym-2I7ju60aVtuCqFCRgNzT4LIvXaZRfe6ZjYx_eo"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "row_number"
+          ],
+          "value": {
+            "row_number": "={{ $json.row_number }}",
+            "사실JSON": "={{ $json.facts_json_text }}",
+            "검증로그": "={{ $json.gate_reason }}",
+            "이미지등급": "={{ $json.image_grade }}",
+            "상태": "보류"
+          },
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "237bbc15-40de-4518-8cb7-127bfd460ebe",
+      "name": "시트 갱신 (탈락: 보류)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2000,
+        460
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets - inseoul"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "results_url 응답은 JSONL(줄바꿈 구분 JSON)입니다.\n이 노드의 Options → Response → Response Format을\n'Text'로 설정하세요 (자동 JSON 파싱을 끄지 않으면 깨집니다).\nMake의 'Parse response: No'와 같은 목적입니다.",
+        "height": 160,
+        "width": 300
+      },
+      "id": "b5fa8be5-52e0-4c87-8072-9b38365aea33",
+      "name": "Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "content": "게이트A 기준: facts≥6, sources≥2, 첫 entity의 fact_ids≥1.\nRouter 12를 그대로 옮긴 것입니다. 마지막 경로를 Fallback으로\n지정할 필요가 없습니다 — n8n If 노드는 조건이 거짓이면\n자동으로 두 번째 출력(보류)으로 갑니다.",
+        "height": 160,
+        "width": 300
+      },
+      "id": "40aea816-d969-450d-a047-1b8a987d770a",
+      "name": "Note4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1780,
+        460
+      ]
+    }
+  ],
+  "connections": {
+    "실행": {
+      "main": [
+        [
+          {
+            "node": "시트 읽기 (전체)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "시트 읽기 (전체)": {
+      "main": [
+        [
+          {
+            "node": "조사중 행 찾기",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "조사중 행 찾기": {
+      "main": [
+        [
+          {
+            "node": "Anthropic: 배치 상태 조회",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic: 배치 상태 조회": {
+      "main": [
+        [
+          {
+            "node": "조사 완료됨?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "조사 완료됨?": {
+      "main": [
+        [
+          {
+            "node": "Anthropic: 결과 다운로드 (raw)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "아직 진행중 (다음 실행에서 재확인)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic: 결과 다운로드 (raw)": {
+      "main": [
+        [
+          {
+            "node": "사실 JSON 추출 + 게이트A 판정",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "사실 JSON 추출 + 게이트A 판정": {
+      "main": [
+        [
+          {
+            "node": "게이트A 통과?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "게이트A 통과?": {
+      "main": [
+        [
+          {
+            "node": "원고 요청 본문 생성",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "시트 갱신 (탈락: 보류)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "원고 요청 본문 생성": {
+      "main": [
+        [
+          {
+            "node": "Anthropic: 원고 배치 제출",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic: 원고 배치 제출": {
+      "main": [
+        [
+          {
+            "node": "시트 갱신 (통과: 생성중)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

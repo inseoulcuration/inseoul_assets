@@ -1,0 +1,353 @@
+{
+  "name": "03. 원고 결과 수령·저장 (inseoul_원고수령)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "02cca31b-9655-4306-ab7e-74ff92118ed2",
+      "name": "실행",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1e3ym-2I7ju60aVtuCqFCRgNzT4LIvXaZRfe6ZjYx_eo"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "0"
+        },
+        "options": {}
+      },
+      "id": "2dda6431-3869-47ff-8412-072db0d2129e",
+      "name": "시트 읽기 (전체)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        460,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets - inseoul"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst rows = $input.all().map(i => i.json);\nconst target = rows.find(r => String(r['상태'] || '').trim() === '생성중' && String(r['원고배치ID'] || '').trim() !== '');\nif (!target) return [];\nreturn [{ json: target }];\n",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "4e839d17-da4e-4b03-9350-46019c77ab53",
+      "name": "생성중 행 찾기",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.anthropic.com/v1/messages/batches/{{ $json['원고배치ID'] }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "id": "e0b08d26-cfb2-4633-be03-9d41c5e244a0",
+      "name": "Anthropic: 배치 상태 조회",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "b18f1c84-286f-4773-9f3c-9209967e66b9",
+              "leftValue": "={{ $json.processing_status }}",
+              "rightValue": "ended",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "abb1fb47-6fae-4ae4-be03-0488a3ff3a5d",
+      "name": "생성 완료됨?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "d798e672-5948-4e32-aaaa-4152bf01e391",
+      "name": "아직 진행중 (다음 실행에서 재확인)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.results_url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "id": "0e766b7b-1a1d-442b-9486-dbfd7cd7f11c",
+      "name": "Anthropic: 결과 다운로드 (raw)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst item = $input.first().json;\nconst raw = (item && item.data !== undefined) ? item.data : item;\nconst text = typeof raw === 'string' ? raw : JSON.stringify(raw);\nconst lines = text.split('\\n').map(l => l.trim()).filter(Boolean);\nif (!lines.length) { throw new Error('배치 결과가 비어 있습니다 (results_url 응답을 확인하세요)'); }\nconst result = JSON.parse(lines[0]);\nconst blocks = (result.result && result.result.message && result.result.message.content) || [];\nconst textBlocks = blocks.filter(b => b.type === 'text');\nif (!textBlocks.length) { throw new Error('원고 응답에 text 블록이 없습니다'); }\nconst lastText = textBlocks[textBlocks.length - 1].text;\n\nconst between = lastText.split('<<<').pop().split('>>>')[0].trim();\nconst draft = JSON.parse(between);\nconst slides = draft.slides || [];\nconst creditsJoined = slides.map(s => s.photo_credit || '').join(',');\nconst sourcesJoined = slides.map(s => s.photo_source || '').join('\\n');\nconst rowInfo = $('생성중 행 찾기').item.json;\n\nreturn [{ json: {\n  row_number: rowInfo.row_number,\n  draft_json_text: between,\n  caption: draft.caption || '',\n  credits_joined: creditsJoined,\n  sources_joined: sourcesJoined,\n} }];\n",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "be1aa246-3776-424a-87a9-61054c1ee7f2",
+      "name": "원고 JSON 추출",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1e3ym-2I7ju60aVtuCqFCRgNzT4LIvXaZRfe6ZjYx_eo"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "row_number"
+          ],
+          "value": {
+            "row_number": "={{ $json.row_number }}",
+            "원고JSON": "={{ $json.draft_json_text }}",
+            "캡션": "={{ $json.caption }}",
+            "사진출처": "={{ $json.credits_joined }}",
+            "사진출처링크": "={{ $json.sources_joined }}",
+            "상태": "검증중"
+          },
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "ba1de710-64de-420b-bd9e-d190ddb17b70",
+      "name": "시트 갱신 (원고JSON·캡션·출처, 상태=검증중)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1780,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets - inseoul"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "results_url 응답 Response Format을 'Text'로 설정하세요\n(JSONL이라 자동 JSON 파싱하면 깨집니다).",
+        "height": 140,
+        "width": 300
+      },
+      "id": "f716512f-3412-4812-821f-cefa4434bd15",
+      "name": "Note5",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "content": "사진출처(쉼표 구분)와 사진출처링크(줄바꿈 구분)는\n구분자가 다릅니다 — Make 원본과 동일하게 유지했습니다.\nW열=사진출처, X열=사진출처링크.",
+        "height": 140,
+        "width": 300
+      },
+      "id": "0bdee7fb-6550-4e9f-9b4d-a72c460d3cf2",
+      "name": "Note6",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1780,
+        460
+      ]
+    }
+  ],
+  "connections": {
+    "실행": {
+      "main": [
+        [
+          {
+            "node": "시트 읽기 (전체)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "시트 읽기 (전체)": {
+      "main": [
+        [
+          {
+            "node": "생성중 행 찾기",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "생성중 행 찾기": {
+      "main": [
+        [
+          {
+            "node": "Anthropic: 배치 상태 조회",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic: 배치 상태 조회": {
+      "main": [
+        [
+          {
+            "node": "생성 완료됨?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "생성 완료됨?": {
+      "main": [
+        [
+          {
+            "node": "Anthropic: 결과 다운로드 (raw)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "아직 진행중 (다음 실행에서 재확인)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic: 결과 다운로드 (raw)": {
+      "main": [
+        [
+          {
+            "node": "원고 JSON 추출",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "원고 JSON 추출": {
+      "main": [
+        [
+          {
+            "node": "시트 갱신 (원고JSON·캡션·출처, 상태=검증중)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

@@ -1,0 +1,243 @@
+{
+  "name": "01. 사실조사 배치 제출 (inseoul_배치제출)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "e787054e-4893-42b0-9d65-34f5d771d84b",
+      "name": "실행",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1e3ym-2I7ju60aVtuCqFCRgNzT4LIvXaZRfe6ZjYx_eo"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "0"
+        },
+        "options": {}
+      },
+      "id": "3b443b47-5b4e-4e85-9abe-7239c86493d1",
+      "name": "시트 읽기 (전체)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        460,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets - inseoul"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst rows = $input.all().map(i => i.json);\nconst target = rows.find(r => String(r['승인'] || '').trim() === 'O' && String(r['상태'] || '').trim() === '대기');\nif (!target) return [];\nreturn [{ json: target }];\n",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "42a3d788-8dde-48fd-a5e3-912c56b297c6",
+      "name": "대기 행 찾기 (승인=O, 상태=대기)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst row = $input.first().json;\nconst template = `당신은 리테일·공간 콘텐츠의 사실조사를 담당합니다.\n\n주제: __TOPIC__\n필러: __PILLAR__\n유형: __TYPE__\n방향: __DIRECTION__\n신선도: __FRESHNESS__\n\n조사 규칙\n1. 주제에 등장한 모든 대상(지명·브랜드·시설)을 각각 따로 검색해 검증하세요. 필요한 만큼 검색을 쓰되, 주제와 무관한 대상으로 범위를 넓히지는 마세요.\n2. 방향에 적힌 논점을 뒷받침하거나 반박하는 자료를 우선합니다.\n3. 서로 다른 매체 2곳 이상에서 확인하세요. 공식 발표·보도가 블로그보다 우선입니다.\n4. 신선도에 연도가 있으면 그 시점의 자료를 찾으세요. 오래된 자료로 대체하지 마세요.\n5. 추정·전망·업계 관측은 넣지 마세요. 확인된 것만.\n6. 자료를 못 찾은 대상은 fact_ids를 빈 배열로 두세요. 억지로 채우지 마세요.\n7. 검색 중간에 요약이나 설명을 쓰지 마세요. 검색을 모두 마친 뒤 최종 JSON만 한 번에 출력하세요.\n\n출력은 반드시 <<< 와 >>> 사이에 JSON만. 그 밖에는 아무것도 쓰지 마세요.\n\n<<<\n{\"topic\":\"\",\"entities\":[{\"name\":\"대상\",\"fact_ids\":[\"f1\"]}],\"facts\":[{\"id\":\"f1\",\"claim\":\"검증된 사실 한 문장\",\"source_idx\":0,\"source_date\":\"YYYY-MM-DD\",\"type\":\"보도|공식|관찰\",\"confidence\":\"high|medium\"}],\"numbers\":[{\"value\":\"표기 그대로\",\"meaning\":\"\",\"fact_id\":\"f1\"}],\"names\":[\"고유명사 정확한 표기\"],\"angle\":\"리테일 MD 시선에서 가장 흥미로운 지점 한 줄. 공백 포함 45자 이내\",\"sources\":[{\"title\":\"\",\"url\":\"\",\"publisher\":\"\",\"date\":\"YYYY-MM-DD\"}],\"image_grade\":\"A|B|C\",\"grade_reason\":\"\"}\n>>>\n\nfacts는 6~8개, 각 한 문장으로 간결하게.\n\nnumbers에는 facts의 claim 문장 안에 실제로 등장하는 숫자·시기만 넣으세요. claim에 없는 값을 fact_id와 함께 적는 것은 금지입니다.\n\nnames에는 facts의 claim 문장 안에 등장하는 고유명사만 넣으세요. 검색 중 봤지만 claim에 쓰지 않은 이름은 제외합니다.\n\nimage_grade는 이 주제의 이미지 저작권 부담을 판정한 값입니다.\n\nA — 개인 사업자, 독립 브랜드, 소규모 편집숍·카페·공방, 개인이 운영하는 팝업.\n    권리자가 노출을 반기고 사용 허락을 구하기 쉬운 대상.\nB — 중견 브랜드, 백화점·쇼핑몰, 복합문화공간, 프랜차이즈, 공공기관 운영 공간.\n    공식 홍보 이미지가 존재하고 보도자료 배포가 이루어지는 대상.\nC — 명품 브랜드, 대기업이 직접 운영하는 플래그십, 글로벌 브랜드의 공식 매장,\n    이미지 사용에 법무 검토가 붙을 것으로 보이는 대상.\n\n판정 규칙\n1. 주제에 여러 대상이 섞여 있으면 가장 높은 부담을 기준으로 판정합니다.\n2. 애매하면 한 단계 보수적으로 판정합니다.\n3. grade_reason에는 왜 그 등급인지 한 줄로 적습니다. 30자 이내.`;\nconst prompt = template\n  .split('__TOPIC__').join(row['주제'] || '')\n  .split('__PILLAR__').join(row['필러'] || '')\n  .split('__TYPE__').join(row['유형'] || '')\n  .split('__DIRECTION__').join(row['한줄요약'] || '')\n  .split('__FRESHNESS__').join(row['신선도'] || '');\n\nconst body = {\n  requests: [{\n    custom_id: 'facts',\n    params: {\n      model: 'claude-sonnet-4-6',\n      max_tokens: 8000,\n      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 6 }],\n      messages: [{ role: 'user', content: prompt }]\n    }\n  }]\n};\n\nreturn [{ json: { row_number: row.row_number, body } }];\n",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "61f97ee8-7f01-4ca6-9df0-360107e9103d",
+      "name": "사실조사 요청 본문 생성",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages/batches",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}"
+      },
+      "id": "8f3770a5-ddcf-4449-bbda-caa43a44f7ee",
+      "name": "Anthropic: 사실조사 배치 제출",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1e3ym-2I7ju60aVtuCqFCRgNzT4LIvXaZRfe6ZjYx_eo"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "row_number"
+          ],
+          "value": {
+            "row_number": "={{ $('사실조사 요청 본문 생성').item.json.row_number }}",
+            "배치ID": "={{ $json.data.id }}",
+            "상태": "조사중"
+          },
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "0a0866d1-af16-4f40-8e79-e6f93092ede8",
+      "name": "시트 갱신 (배치ID, 상태=조사중)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1340,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets - inseoul"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "이 워크플로는 Make의 inseoul_배치제출을 그대로 옮긴 것입니다.\n'시트 읽기'는 전체 행을 읽고, 다음 Code 노드가 승인=O & 상태=대기인\n첫 행만 골라냅니다 (Make의 필터+Limit1과 동일한 효과).\n\n실행 전: Google Sheets 노드 2곳에 자격증명을 연결하세요.",
+        "height": 160,
+        "width": 420
+      },
+      "id": "f07ad161-8ace-4fab-b846-4a9cf27ea2e4",
+      "name": "Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "content": "ANTHROPIC_API_KEY 환경변수가 필요합니다.\n(n8n 설정 → Variables, 또는 .env)",
+        "height": 120,
+        "width": 260
+      },
+      "id": "95160312-10a8-4a0f-9a3c-c9ff1440a967",
+      "name": "Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        60
+      ]
+    }
+  ],
+  "connections": {
+    "실행": {
+      "main": [
+        [
+          {
+            "node": "시트 읽기 (전체)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "시트 읽기 (전체)": {
+      "main": [
+        [
+          {
+            "node": "대기 행 찾기 (승인=O, 상태=대기)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "대기 행 찾기 (승인=O, 상태=대기)": {
+      "main": [
+        [
+          {
+            "node": "사실조사 요청 본문 생성",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "사실조사 요청 본문 생성": {
+      "main": [
+        [
+          {
+            "node": "Anthropic: 사실조사 배치 제출",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic: 사실조사 배치 제출": {
+      "main": [
+        [
+          {
+            "node": "시트 갱신 (배치ID, 상태=조사중)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

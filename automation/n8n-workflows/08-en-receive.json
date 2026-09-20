@@ -1,0 +1,335 @@
+{
+  "name": "08. EN 원고 결과 수령·저장 (inseoul_EN수령)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "5f7aa0ec-7c50-4780-9958-896292e5c836",
+      "name": "실행",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1e3ym-2I7ju60aVtuCqFCRgNzT4LIvXaZRfe6ZjYx_eo"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "0"
+        },
+        "options": {}
+      },
+      "id": "d4de0ec6-8be1-4332-bc92-472be6aba4c7",
+      "name": "시트 읽기 (전체)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        460,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets - inseoul"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst rows = $input.all().map(i => i.json);\nconst target = rows.find(r =>\n  String(r['EN배치ID'] || '').trim() !== '' &&\n  String(r['EN원고JSON'] || '').trim() === ''\n);\nif (!target) return [];\nreturn [{ json: target }];\n",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "42205f69-61bc-4015-82d7-6469d2cf41a1",
+      "name": "EN 수령 대상 행 찾기 (EN배치ID 있음·EN원고JSON 없음)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.anthropic.com/v1/messages/batches/{{ $json['EN배치ID'] }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "id": "71e867b3-c924-4259-920b-74aaffa5810a",
+      "name": "Anthropic: 배치 상태 조회",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "709ccf51-9d1b-417b-ad8f-38fb1e50474d",
+              "leftValue": "={{ $json.processing_status }}",
+              "rightValue": "ended",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "660d155c-2251-4947-bec7-97312cf80052",
+      "name": "생성 완료됨?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "1a70b90d-e653-4a40-b844-5baffb1cd1a8",
+      "name": "아직 진행중 (다음 실행에서 재확인)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.results_url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "id": "3d004050-27ec-4466-b417-b65405d1b984",
+      "name": "Anthropic: 결과 다운로드 (raw)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst item = $input.first().json;\nconst raw = (item && item.data !== undefined) ? item.data : item;\nconst text = typeof raw === 'string' ? raw : JSON.stringify(raw);\nconst lines = text.split('\\n').map(l => l.trim()).filter(Boolean);\nif (!lines.length) { throw new Error('배치 결과가 비어 있습니다 (results_url 응답을 확인하세요)'); }\nconst result = JSON.parse(lines[0]);\nconst blocks = (result.result && result.result.message && result.result.message.content) || [];\nconst textBlocks = blocks.filter(b => b.type === 'text');\nif (!textBlocks.length) { throw new Error('EN 원고 응답에 text 블록이 없습니다'); }\nconst lastText = textBlocks[textBlocks.length - 1].text;\n\nconst between = lastText.split('<<<').pop().split('>>>')[0].trim();\nconst draft = JSON.parse(between);\nconst rowInfo = $('EN 수령 대상 행 찾기').item.json;\n\nreturn [{ json: {\n  row_number: rowInfo.row_number,\n  en_draft_json_text: between,\n  en_caption: draft.caption || '',\n} }];\n",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "1880e071-efd2-4691-8055-138d2783b4c3",
+      "name": "EN 원고 JSON 추출",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1e3ym-2I7ju60aVtuCqFCRgNzT4LIvXaZRfe6ZjYx_eo"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "row_number"
+          ],
+          "value": {
+            "row_number": "={{ $json.row_number }}",
+            "EN원고JSON": "={{ $json.en_draft_json_text }}",
+            "EN캡션": "={{ $json.en_caption }}"
+          },
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "af64a8ae-a192-4720-b72a-8dceac98c701",
+      "name": "시트 갱신 (EN원고JSON·EN캡션)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1780,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets - inseoul"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "상태(H)·원고JSON(N)·캡션(U)·사진출처(W)·사진출처링크(X)는\n여기서 건드리지 않습니다 — Update에 매핑된 컬럼만 쓰이므로\nMake 클론 때처럼 '값을 일부러 비우는' 작업이 필요 없습니다\n(문서 §12-4의 '비우는 작업이 채우는 작업보다 중요' 문제가 사라짐).",
+        "height": 160,
+        "width": 380
+      },
+      "id": "3dacb939-b621-4a51-afed-a8218b1794bd",
+      "name": "Note13",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        480
+      ]
+    }
+  ],
+  "connections": {
+    "실행": {
+      "main": [
+        [
+          {
+            "node": "시트 읽기 (전체)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "시트 읽기 (전체)": {
+      "main": [
+        [
+          {
+            "node": "EN 수령 대상 행 찾기 (EN배치ID 있음·EN원고JSON 없음)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "EN 수령 대상 행 찾기 (EN배치ID 있음·EN원고JSON 없음)": {
+      "main": [
+        [
+          {
+            "node": "Anthropic: 배치 상태 조회",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic: 배치 상태 조회": {
+      "main": [
+        [
+          {
+            "node": "생성 완료됨?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "생성 완료됨?": {
+      "main": [
+        [
+          {
+            "node": "Anthropic: 결과 다운로드 (raw)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "아직 진행중 (다음 실행에서 재확인)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic: 결과 다운로드 (raw)": {
+      "main": [
+        [
+          {
+            "node": "EN 원고 JSON 추출",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "EN 원고 JSON 추출": {
+      "main": [
+        [
+          {
+            "node": "시트 갱신 (EN원고JSON·EN캡션)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

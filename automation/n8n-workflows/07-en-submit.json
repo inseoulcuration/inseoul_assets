@@ -1,0 +1,227 @@
+{
+  "name": "07. EN 원고 배치 제출 (inseoul_EN제출)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "729f79e2-12af-46b6-aa05-f13cdcd26649",
+      "name": "실행",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1e3ym-2I7ju60aVtuCqFCRgNzT4LIvXaZRfe6ZjYx_eo"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "0"
+        },
+        "options": {}
+      },
+      "id": "4012d23c-b03e-4274-b711-84591c3128a3",
+      "name": "시트 읽기 (전체)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        460,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets - inseoul"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst rows = $input.all().map(i => i.json);\nconst target = rows.find(r =>\n  String(r['원고JSON'] || '').trim() !== '' &&\n  String(r['EN배치ID'] || '').trim() === '' &&\n  String(r['상태'] || '').trim() === '발행완료'\n);\nif (!target) return [];\nreturn [{ json: target }];\n",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "e45eca31-a912-4352-a49f-11fc8cc6dee5",
+      "name": "EN 대상 행 찾기 (원고JSON 있음·EN배치ID 없음·발행완료)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst row = $input.first().json;\nconst systemPrompt = `You are an editor producing English Instagram card-news for @inseoul_curation_en, a Seoul retail and space account.\n\nYou receive a Korean card-news draft. Produce the English version.\n\nThis is NOT translation. It is a rewrite for a different reader.\n\n[Reader]\nPeople outside Korea who are interested in Seoul — visitors, expats, people who follow\nKorean culture. They do not know Korean place names, brands, or administrative context.\nThey are curious, not expert.\n\n[Structure — do not change]\nKeep the exact same number of slides, the same no, the same role, and the same\nphoto_type, photo_query, photo_caption, photo_source, photo_credit as the Korean draft.\nCopy those five fields over unchanged. The two versions share the same photos.\nOnly headline, body, and caption are rewritten.\n\n[Writing — the standard]\nWrite as if this were commissioned in English from the start. A native reader\nshould never sense a Korean original behind it. If a sentence reads like a\ntranslation, rewrite it from the idea, not from the Korean words.\n\n- Short sentences. Active verbs. English rhythm, not Korean sentence order.\n- English is usually SHORTER than Korean. Do not pad to match length.\n- Drop what does not survive. A clause needing three lines of setup is not worth keeping.\n- Do not invent facts. Everything traces back to the Korean draft.\n\nAvoid these translation tells:\n- Stacked modifiers before a noun. Korean piles them up; English breaks them out.\n  Not: \"the recently extended weekend night operation hours\"\n  Yes: \"weekend hours now run an hour later\"\n- Abstract nouns where a verb works. Not \"the expansion of operation\" but \"it expanded\".\n- \"It is said that\", \"It can be seen that\", \"It seems that\" as sentence openers.\n  State it, or attribute it to who said it.\n- Hedging chains. Korean layers ~로 보인다 politely; English reads that as weak.\n  One hedge per sentence at most.\n- \"Various\", \"diverse\", \"numerous\", \"a lot of\" as filler quantifiers.\n- Literal renderings of Korean connectives — 한편, 또한, 이처럼 — as\n  \"On the other hand\", \"Also\", \"Like this\". Usually the sentence needs none.\n- Starting consecutive sentences with the same structure.\n\nKeep the MD voice: observational, structural, unimpressed. No brochure language,\nno exclamation, no \"must-visit\" or \"hidden gem\".\n\n[Proper nouns]\nFirst mention: romanized name + a short gloss in the same sentence or in parentheses.\n  Seoul Dal, a tethered gas balloon in Yeouido Park\n  Seongsu, a former factory district turned retail hub\n  Musinsa, Korea's largest fashion e-commerce platform\nAfter that, the romanized name alone.\nDo not gloss what is already familiar to a global reader (Hangang River is fine as \"the Han River\").\n\n[Numbers]\n- Keep figures exactly as in the Korean draft. Do not convert currency.\n- Korean date format 8~10월 becomes August to October.\n- 오후 11시 becomes 11pm. Use am/pm, not 24-hour.\n- Large Korean number units: 10만8000명 becomes 108,000 visitors.\n\n[Length]\n- Cover body: 40 characters or fewer.\n- Other body: 90 characters or fewer. Three lines is better than four.\n- headline fits in two lines.\nThese are hard limits. Text is clipped if it overflows.\n\n[Caption]\nRewrite the Korean caption for the same English reader. Same structure:\n1. Hook — 2 lines\n2. Body — 3 to 4 short paragraphs, 300 to 450 characters\n3. The MD read — one short paragraph on why this matters structurally\n4. A question that splits opinion\n5. Signature — Reading Seoul's retail spaces, one at a time.\n6. Four hashtags — #SeoulRetail #RetailMD #SpaceDesign + one proper noun from this story\n\nRules\n- Do not repeat the specific figures already on the cards. The caption adds context.\n- No hashtags in the first line.\n- Short sentences. Paragraphs over three lines do not get read on mobile.\n- No save/share call to action. The question already asks for engagement.\n- Line breaks as real newlines.\n\nOutput only JSON between <<< and >>>. Format: {\"slides\":[{\"no\":1,\"role\":\"표지|본문|클로징\",\"headline\":\"\",\"body\":\"\",\"photo_type\":\"\",\"photo_query\":\"\",\"photo_caption\":\"\",\"photo_source\":\"\",\"photo_credit\":\"\",\"used_facts\":[\"f1\"]}],\"caption\":\"\"}\n\nKeep role values in Korean (표지 / 본문 / 클로징) so the renderer recognizes them.\nCopy used_facts over unchanged.`;\n\nconst body = {\n  requests: [{\n    custom_id: 'draft_en',\n    params: {\n      model: 'claude-sonnet-4-6',\n      max_tokens: 10000,\n      system: systemPrompt,\n      messages: [{ role: 'user', content: row['원고JSON'] }]\n    }\n  }]\n};\n\nreturn [{ json: { row_number: row.row_number, body } }];\n",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "9c2f2cc0-6c4b-4065-b58e-5e82302fb728",
+      "name": "EN 원고 요청 본문 생성",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages/batches",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}"
+      },
+      "id": "a2b1fb74-2315-4177-965c-88c1f7f99e02",
+      "name": "Anthropic: EN 원고 배치 제출",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1e3ym-2I7ju60aVtuCqFCRgNzT4LIvXaZRfe6ZjYx_eo"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "row_number"
+          ],
+          "value": {
+            "row_number": "={{ $('EN 원고 요청 본문 생성').item.json.row_number }}",
+            "EN배치ID": "={{ $json.data.id }}"
+          },
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "06db2e96-b6af-4c7b-af77-570f782f586c",
+      "name": "시트 갱신 (EN배치ID)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1340,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets - inseoul"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "KR 원고(원고JSON)를 입력으로 그대로 넘겨 슬라이드 수·순서·\nphoto_type 등 5개 필드를 EN 프롬프트가 그대로 복사하게 합니다.\n그래야 rows/ 사진을 KR·EN이 공유해도 어긋나지 않습니다(문서 §12-1).\n'상태=발행완료' 조건은 KR 발행 전에 EN이 먼저 나가는 사고를 막습니다.",
+        "height": 160,
+        "width": 380
+      },
+      "id": "7f621f14-b96f-4a30-9cea-1c4cc2d0407f",
+      "name": "Note12",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        660,
+        60
+      ]
+    }
+  ],
+  "connections": {
+    "실행": {
+      "main": [
+        [
+          {
+            "node": "시트 읽기 (전체)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "시트 읽기 (전체)": {
+      "main": [
+        [
+          {
+            "node": "EN 대상 행 찾기 (원고JSON 있음·EN배치ID 없음·발행완료)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "EN 대상 행 찾기 (원고JSON 있음·EN배치ID 없음·발행완료)": {
+      "main": [
+        [
+          {
+            "node": "EN 원고 요청 본문 생성",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "EN 원고 요청 본문 생성": {
+      "main": [
+        [
+          {
+            "node": "Anthropic: EN 원고 배치 제출",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic: EN 원고 배치 제출": {
+      "main": [
+        [
+          {
+            "node": "시트 갱신 (EN배치ID)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

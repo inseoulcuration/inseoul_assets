@@ -1,0 +1,269 @@
+{
+  "name": "04. GitHub 사진 수집 (inseoul_사진수집)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "2deffcfd-838d-4eb5-b31b-3fada38b477b",
+      "name": "실행",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1e3ym-2I7ju60aVtuCqFCRgNzT4LIvXaZRfe6ZjYx_eo"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "0"
+        },
+        "options": {}
+      },
+      "id": "c195dc29-05b5-4a26-bc11-8d98d54382e0",
+      "name": "시트 읽기 (전체)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        460,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets - inseoul"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst rows = $input.all().map(i => i.json);\nconst target = rows.find(r => String(r['상태'] || '').trim() === '검증중');\nif (!target) return [];\nreturn [{ json: target }];\n",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "a5b66646-777b-41a5-9835-c2405c6dda48",
+      "name": "검증중 행 찾기",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/inseoulcuration/inseoul_assets/contents/rows/{{ $json.row_number }}",
+        "options": {}
+      },
+      "id": "425b4362-327a-4ed4-aefa-46edd98311bc",
+      "name": "GitHub: rows/{행번호} 폴더 조회",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst resp = $input.first().json;\nconst list = Array.isArray(resp) ? resp : (Array.isArray(resp.body) ? resp.body : []);\nconst photos = list\n  .filter(f => f && f.name && f.name !== '.gitkeep')\n  .sort((a, b) => a.name.localeCompare(b.name))\n  .map(f => f.download_url)\n  .join(',');\nconst rowInfo = $('검증중 행 찾기').item.json;\nreturn [{ json: { row_number: rowInfo.row_number, photos, has_photos: photos.length > 0 } }];\n",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "8255c18b-da95-4f1a-a02d-91efe804f2e6",
+      "name": "다운로드 URL 정렬·조인",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "b609d630-527d-43a5-b3a6-fa64b28804aa",
+              "leftValue": "={{ $json.has_photos }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "98c457f1-befc-4d5e-99f8-2e29be52ab64",
+      "name": "사진 있음?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1e3ym-2I7ju60aVtuCqFCRgNzT4LIvXaZRfe6ZjYx_eo"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "row_number"
+          ],
+          "value": {
+            "row_number": "={{ $json.row_number }}",
+            "사진URL": "={{ $json.photos }}",
+            "상태": "사진완료"
+          },
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "a7343c7c-83ec-465c-8073-db36eeeef891",
+      "name": "시트 갱신 (사진URL, 상태=사진완료)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1560,
+        200
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets - inseoul"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "a0d64fcf-7681-427c-90df-bdac53c5ea06",
+      "name": "폴더가 비어있음 - 사진 업로드 대기",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "content": "rows/{행번호}/01.jpg, 02.jpg ... 순서로 GitHub에\n드래그 업로드해두면 이 워크플로가 R열을 자동으로 채웁니다.\n비공개 리포로 바꾸면 이 GitHub 노드에 PAT 인증을 추가해야 합니다\n(현재는 공개 리포 기준으로 인증 없이 조회).",
+        "height": 160,
+        "width": 340
+      },
+      "id": "208c8dda-8e90-4fe8-9a37-99c6be6e85c7",
+      "name": "Note7",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        860,
+        60
+      ]
+    }
+  ],
+  "connections": {
+    "실행": {
+      "main": [
+        [
+          {
+            "node": "시트 읽기 (전체)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "시트 읽기 (전체)": {
+      "main": [
+        [
+          {
+            "node": "검증중 행 찾기",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "검증중 행 찾기": {
+      "main": [
+        [
+          {
+            "node": "GitHub: rows/{행번호} 폴더 조회",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GitHub: rows/{행번호} 폴더 조회": {
+      "main": [
+        [
+          {
+            "node": "다운로드 URL 정렬·조인",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "다운로드 URL 정렬·조인": {
+      "main": [
+        [
+          {
+            "node": "사진 있음?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "사진 있음?": {
+      "main": [
+        [
+          {
+            "node": "시트 갱신 (사진URL, 상태=사진완료)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "폴더가 비어있음 - 사진 업로드 대기",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
