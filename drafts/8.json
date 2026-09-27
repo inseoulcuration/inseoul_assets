@@ -1,0 +1,140 @@
+{
+  "slides": [
+    {
+      "no": 1,
+      "role": "표지",
+      "layout": "표지",
+      "headline": "좋은 공간은 왜\n나무를 고르는가",
+      "body": "마감재는 취향이 아니라 시간의 문제다",
+      "table": [],
+      "photo_type": "실사",
+      "photo_query": "우드 인테리어 리테일 공간",
+      "photo_query_en": "wood interior retail space warm lighting",
+      "photo_caption": "우드 마감 상업 공간 내부",
+      "photo_alt": "따뜻한 조명 아래 나무 마감재로 꾸며진 상업 공간 내부",
+      "photo_source": "https://www.resiklonyc.com/blogs/resiklo-blogs/material-matters-how-wood-metal-and-upholstery-age-with-elegance",
+      "photo_sources": [
+        "https://www.resiklonyc.com/blogs/resiklo-blogs/material-matters-how-wood-metal-and-upholstery-age-with-elegance",
+        "https://dearmaswoodfloors.com/how-long-does-each-type-of-flooring last-a-homeowners-guide-to-flooring-lifespan"
+      ],
+      "photo_credit": "ⓒ Resiklo NYC",
+      "used_facts": ["f1", "f3"]
+    },
+    {
+      "no": 2,
+      "role": "본문",
+      "layout": "비교",
+      "headline": "같은 시간, 다른 결말",
+      "body": "두 소재가 마모를 받아들이는 방식은 정반대다",
+      "table": [
+        "하드우드‖마모되면 샌딩·리피니싱으로 원래 상태로 되돌릴 수 있다",
+        "스테인리스 스틸‖스크래치가 누적되며 깊은 흠집은 비가역적으로 남는다"
+      ],
+      "photo_type": "",
+      "photo_query": "",
+      "photo_query_en": "",
+      "photo_caption": "",
+      "photo_alt": "",
+      "photo_source": "",
+      "photo_sources": [],
+      "photo_credit": "",
+      "used_facts": ["f2", "f4", "f5"]
+    },
+    {
+      "no": 3,
+      "role": "본문",
+      "layout": "수치강조",
+      "headline": "50~100년",
+      "body": "솔리드 하드우드의 수명. 교체가 아니라 복원으로 이어진다",
+      "table": [
+        "50~100년‖정기 유지관리를 전제로 한 솔리드 하드우드 바닥재의 예상 수명. 리피니싱으로 세대를 넘길 수 있다"
+      ],
+      "photo_type": "",
+      "photo_query": "",
+      "photo_query_en": "",
+      "photo_caption": "",
+      "photo_alt": "",
+      "photo_source": "",
+      "photo_sources": [],
+      "photo_credit": "",
+      "used_facts": ["f1", "f2"]
+    },
+    {
+      "no": 4,
+      "role": "본문",
+      "layout": "텍스트",
+      "headline": "닳는 것이 아니라 익어가는 것",
+      "body": "내추럴 우드는 시간이 쌓이면서 그레인을 강조하는 패티나를 형성한다. 오크는 허니드 색조로, 마호가니는 더 어둡게—<b>수종마다 고유한 에이징</b>이 나타난다. 마모가 흔적이 아니라 이력이 되는 셈이다.",
+      "table": [],
+      "photo_type": "",
+      "photo_query": "",
+      "photo_query_en": "",
+      "photo_caption": "",
+      "photo_alt": "",
+      "photo_source": "",
+      "photo_sources": [],
+      "photo_credit": "",
+      "used_facts": ["f3"]
+    },
+    {
+      "no": 5,
+      "role": "본문",
+      "layout": "사진",
+      "headline": "소비자는 자연 소재 공간에 더 지불한다",
+      "body": "<b>The Economics of Biophilia</b> 연구에 따르면 쇼핑객은 자연 소재 리테일 환경에서 제품 가격을 최대 <b>15%</b> 더 지불할 의사를 보였다.",
+      "table": [],
+      "photo_type": "연출",
+      "photo_query": "자연 소재 매장 쇼핑 공간",
+      "photo_query_en": "natural material store interior shopper",
+      "photo_caption": "자연 소재 리테일 환경",
+      "photo_alt": "목재와 식물 요소가 있는 밝은 리테일 공간에서 쇼핑하는 모습",
+      "photo_source": "https://www.newprocontainers.com/blog/biophilic-design-commercial-spaces-plants/",
+      "photo_sources": [
+        "https://www.newprocontainers.com/blog/biophilic-design-commercial-spaces-plants/",
+        "https://www.terramai.com/blog/biophilic-design-retail/"
+      ],
+      "photo_credit": "ⓒ New Pro Containers",
+      "used_facts": ["f6"]
+    },
+    {
+      "no": 6,
+      "role": "본문",
+      "layout": "수치강조",
+      "headline": "70%",
+      "body": "자연 요소가 매장 선택에 영향을 준다고 답한 소비자 비율",
+      "table": [
+        "70%‖ASID 설문에서 자연 채광·식물 등 자연 요소가 특정 매장을 선택하는 데 긍정적 영향을 미친다고 응답한 소비자 비율"
+      ],
+      "photo_type": "",
+      "photo_query": "",
+      "photo_query_en": "",
+      "photo_caption": "",
+      "photo_alt": "",
+      "photo_source": "",
+      "photo_sources": [],
+      "photo_credit": "",
+      "used_facts": ["f8"]
+    },
+    {
+      "no": 7,
+      "role": "클로징",
+      "layout": "클로징",
+      "headline": "마감재는 결국 시간을 어떻게 다루느냐의 선택이다",
+      "body": "복원 가능한 소재와 그렇지 않은 소재—\n그 차이가 공간의 수명을 가른다.",
+      "table": [],
+      "photo_type": "",
+      "photo_query": "",
+      "photo_query_en": "",
+      "photo_caption": "",
+      "photo_alt": "",
+      "photo_source": "",
+      "photo_sources": [],
+      "photo_credit": "",
+      "used_facts": ["f1", "f2", "f5"]
+    }
+  ],
+  "photo_slots": [1, 5],
+  "numbers_used": ["50~100년", "15%", "70%"],
+  "names_used": ["The Economics of Biophilia", "ASID"],
+  "caption": "좋은 공간이 나무를 고르는 이유는 감성이 아닙니다.\n\n마감재의 진짜 차이는 '마모 이후'에 드러납니다. 솔리드 하드우드는 샌딩과 리피니싱으로 표면을 되살릴 수 있습니다. 스테인리스 스틸은 스크래치가 쌓일수록 광택이 둔해지고, 깊은 흠집은 되돌리기 어렵습니다. 같은 시간을 두고 하나는 복원되고 하나는 소모됩니다.\n\n우드 마감이 단순히 트렌디한 선택처럼 보일 수 있지만, 수치로 보면 다릅니다. The Economics of Biophilia 연구는 자연 소재 공간에서 소비자의 지불 의사가 높아진다는 것을 확인했고, ASID 설문에서는 응답자 10명 중 7명이 자연 요소가 매장 선택에 영향을 준다고 답했습니다.\n\n오크는 시간이 지나면 허니드 색조를 띠고, 마호가니는 더 깊어집니다. 마모가 흔적이 아니라 이력이 되는 소재—이것이 리테일 공간 기획자들이 우드를 택하는 실질적 이유로 보입니다.\n\n공간에서 '시간이 쌓인 느낌'은 만들어지는 게 아니라 허용되는 것일 수 있습니다. 마감재 선택이 그 허용의 첫 번째 조건이 되는 셈입니다.\n\n처음 공간을 기획할 때 마감재의 에이징을 고려하시나요, 아니면 초기 비용과 시공 편의가 우선인가요?\n\n서울의 리테일 공간을 MD 시선으로 기록합니다.\n\n#서울리테일 #리테일MD #공간기획 #바이오필릭디자인\n\n출처: De Armas Wood Floors, TerraMai, Viritopia"
+}
